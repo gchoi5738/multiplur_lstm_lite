@@ -4,122 +4,59 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Multiplur Chatbot</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.18.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
 </head>
 <body>
-    <div id="chat-container">
-        <div id="chat-messages"></div>
-        <input type="text" id="user-input" placeholder="Type your message...">
-        <button onclick="sendMessage()">Send</button>
-    </div>
+    <h1>Multiplur Chatbot</h1>
+    <input type="text" id="user-input" placeholder="Type a message">
+    <button onclick="getResponse()">Send</button>
+    <p id="response"></p>
 
     <script>
         let model;
-        let labelEncoder;
-        let intentResponses;
-
-        async function loadModel() {
-            try {
-                // Load the model.json file
-                const modelResponse = await fetch('model/model.json');
-                let modelJSON = await modelResponse.json();
-        
-                // Modify the input layer to accept any batch size
-                modelJSON.modelTopology.model_config.config.layers[0].config.batch_input_shape = [null, 50];
-        
-                // Create the model artifacts object
-                const modelArtifacts = {
-                    modelTopology: modelJSON.modelTopology,
-                    weightsManifest: modelJSON.weightsManifest,
-                    format: modelJSON.format,
-                    generatedBy: modelJSON.generatedBy,
-                    convertedBy: modelJSON.convertedBy
-                };
-        
-                // Load the model with the modified JSON
-                model = await tf.loadLayersModel(tf.io.fromMemory(modelArtifacts, 'model/'));
-                
-                const labelEncoderResponse = await fetch('model/label_encoder.json');
-                labelEncoder = await labelEncoderResponse.json();
-                const intentResponsesResponse = await fetch('intent_responses.json');
-                intentResponses = await intentResponsesResponse.json();
-                await loadTokenizer();  // Load the tokenizer
-                console.log('Model and data loaded successfully');
-            } catch (error) {
-                console.error('Error loading model or data:', error);
-            }
-        }
-
         let tokenizer;
         let word_index;
-        
-        async function loadTokenizer() {
-            const response = await fetch('model/tokenizer.json');
-            const outerJson = await response.json();
-            tokenizer = JSON.parse(outerJson);
+        let intents;
+        const max_seq_len = 50;  // Adjust this based on your model's input shape
+
+        async function loadModel() {
+            model = await tf.loadLayersModel('model/model.json');
+            const tokenizerResponse = await fetch('model/tokenizer.json');
+            const tokenizerData = await tokenizerResponse.json();
+            tokenizer = JSON.parse(tokenizerData);
             word_index = JSON.parse(tokenizer.config.word_index);
+
+            const intentResponse = await fetch('intent_responses.json');
+            intents = await intentResponse.json();
+            console.log('Model and data loaded successfully');
         }
-        
+
         function preprocess(text) {
-            if (!word_index) {
-                console.error('Tokenizer not properly loaded');
-                return null;
+            let words = text.toLowerCase().split(' ');
+            let sequence = words.map(w => word_index[w] || 1);  // Use 1 for OOV words
+            const paddedSequence = new Array(max_seq_len).fill(0);
+            for (let i = 0; i < Math.min(sequence.length, max_seq_len); i++) {
+                paddedSequence[i] = sequence[i];
             }
-            const words = text.toLowerCase().split(' ');
-            const sequence = words.map(word => word_index[word] || 1); // 1 is <OOV> token
-            const padded = padSequence(sequence, 50);  // 50 is the input sequence length
-            return tf.tensor2d([padded]);
-        }
-        
-        function padSequence(sequence, maxLen) {
-            if (sequence.length > maxLen) {
-                return sequence.slice(0, maxLen);
-            }
-            return [...sequence, ...new Array(maxLen - sequence.length).fill(0)];
+            return tf.tensor2d([paddedSequence]);
         }
 
-        async function classifyIntent(userInput) {
-            const inputTensor = preprocess(userInput);
-            if (!inputTensor) {
-                return 'error';
-            }
-            const prediction = await model.predict(inputTensor).array();
-            const intentIndex = prediction[0].indexOf(Math.max(...prediction[0]));
-            return labelEncoder[intentIndex];
-        }
-
-        function getResponse(intent, query) {
-            if (intent in intentResponses) {
-                return intentResponses[intent][Math.floor(Math.random() * intentResponses[intent].length)];
+        async function getResponse() {
+            const inputText = document.getElementById('user-input').value;
+            const inputTensor = preprocess(inputText);
+            const prediction = await model.predict(inputTensor);
+            const responseIndex = tf.argMax(prediction, 1).dataSync()[0];
+            console.log('Predicted intent index:', responseIndex);
+            
+            let response;
+            if (intents[responseIndex] && intents[responseIndex].responses) {
+                response = intents[responseIndex].responses[0];
             } else {
-                return "I'm not sure how to respond to that. Could you please rephrase your question?";
+                response = "I'm sorry, I didn't understand that.";
             }
-        }
-
-        async function sendMessage() {
-            const userInput = document.getElementById('user-input').value;
-            document.getElementById('user-input').value = '';
             
-            displayMessage('User: ' + userInput);
-            
-            try {
-                const intent = await classifyIntent(userInput);
-                const response = getResponse(intent, userInput);
-                displayMessage('Chatbot: ' + response);
-            } catch (error) {
-                console.error('Error processing message:', error);
-                displayMessage('Chatbot: Sorry, I encountered an error. Please try again.');
-            }
+            document.getElementById('response').innerText = response;
         }
-
-        function displayMessage(message) {
-            const chatMessages = document.getElementById('chat-messages');
-            const messageElement = document.createElement('p');
-            messageElement.textContent = message;
-            chatMessages.appendChild(messageElement);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
-        
 
         loadModel();
     </script>
