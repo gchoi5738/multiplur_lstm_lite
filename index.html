@@ -20,7 +20,16 @@
 
         async function loadModel() {
             try {
-                model = await tf.loadLayersModel('model/model.json');
+                // Load the model.json file
+                const modelResponse = await fetch('model/model.json');
+                let modelJSON = await modelResponse.json();
+        
+                // Modify the input layer to accept any batch size
+                modelJSON.modelTopology.model_config.config.layers[0].config.batch_input_shape = [null, 50];
+        
+                // Load the model with the modified JSON
+                model = await tf.loadLayersModel(tf.io.fromMemory(modelJSON, 'model/'));
+                
                 const labelEncoderResponse = await fetch('model/label_encoder.json');
                 labelEncoder = await labelEncoderResponse.json();
                 const intentResponsesResponse = await fetch('intent_responses.json');
@@ -30,6 +39,34 @@
             } catch (error) {
                 console.error('Error loading model or data:', error);
             }
+        }
+
+        let tokenizer;
+        let word_index;
+        
+        async function loadTokenizer() {
+            const response = await fetch('model/tokenizer.json');
+            const outerJson = await response.json();
+            tokenizer = JSON.parse(outerJson);
+            word_index = JSON.parse(tokenizer.config.word_index);
+        }
+        
+        function preprocess(text) {
+            if (!word_index) {
+                console.error('Tokenizer not properly loaded');
+                return null;
+            }
+            const words = text.toLowerCase().split(' ');
+            const sequence = words.map(word => word_index[word] || 1); // 1 is <OOV> token
+            const padded = padSequence(sequence, 50);  // 50 is the input sequence length
+            return tf.tensor2d([padded]);
+        }
+        
+        function padSequence(sequence, maxLen) {
+            if (sequence.length > maxLen) {
+                return sequence.slice(0, maxLen);
+            }
+            return [...sequence, ...new Array(maxLen - sequence.length).fill(0)];
         }
 
         async function classifyIntent(userInput) {
@@ -73,6 +110,7 @@
             chatMessages.appendChild(messageElement);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
+        
 
         loadModel();
     </script>
