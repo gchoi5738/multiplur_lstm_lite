@@ -20,7 +20,7 @@
         const max_seq_len = 50;  // Adjust this based on your model's input shape
 
         async function loadModel() {
-            model = await tf.loadLayersModel('model/model.json');
+            const model = await tf.loadLayersModel('model/model.json', {strict: false});
             const tokenizerResponse = await fetch('model/tokenizer.json');
             const tokenizerData = await tokenizerResponse.json();
             tokenizer = JSON.parse(tokenizerData);
