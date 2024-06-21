@@ -25,7 +25,7 @@
             tokenizer = await tokenizerResponse.json();
             const labelEncoderResponse = await fetch('model/label_encoder.json');
             labelEncoder = await labelEncoderResponse.json();
-            const intentResponsesResponse = await fetch('model/intent_responses.json');
+            const intentResponsesResponse = await fetch('intent_responses.json');
             intentResponses = await intentResponsesResponse.json();
         }
 
