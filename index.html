@@ -15,38 +15,28 @@
 
     <script>
         let model;
-        let tokenizer;
         let labelEncoder;
         let intentResponses;
 
         async function loadModel() {
-            model = await tf.loadLayersModel('model/model.json');
-            const tokenizerResponse = await fetch('model/tokenizer.json');
-            tokenizer = await tokenizerResponse.json();
-            const labelEncoderResponse = await fetch('model/label_encoder.json');
-            labelEncoder = await labelEncoderResponse.json();
-            const intentResponsesResponse = await fetch('intent_responses.json');
-            intentResponses = await intentResponsesResponse.json();
-        }
-
-        function preprocess(text) {
-            // Implement tokenization similar to Python preprocessing
-            // This is a simplified version
-            const words = text.toLowerCase().split(' ');
-            const sequence = words.map(word => tokenizer.word_index[word] || 0);
-            const padded = padSequence(sequence, 50);  // Adjust max_sequence_length as needed
-            return tf.tensor2d([padded]);
-        }
-
-        function padSequence(sequence, maxLen) {
-            if (sequence.length > maxLen) {
-                return sequence.slice(0, maxLen);
+            try {
+                model = await tf.loadLayersModel('model/model.json');
+                const labelEncoderResponse = await fetch('model/label_encoder.json');
+                labelEncoder = await labelEncoderResponse.json();
+                const intentResponsesResponse = await fetch('intent_responses.json');
+                intentResponses = await intentResponsesResponse.json();
+                await loadTokenizer();  // Load the tokenizer
+                console.log('Model and data loaded successfully');
+            } catch (error) {
+                console.error('Error loading model or data:', error);
             }
-            return [...sequence, ...new Array(maxLen - sequence.length).fill(0)];
         }
 
         async function classifyIntent(userInput) {
             const inputTensor = preprocess(userInput);
+            if (!inputTensor) {
+                return 'error';
+            }
             const prediction = await model.predict(inputTensor).array();
             const intentIndex = prediction[0].indexOf(Math.max(...prediction[0]));
             return labelEncoder[intentIndex];
@@ -54,23 +44,7 @@
 
         function getResponse(intent, query) {
             if (intent in intentResponses) {
-                let response = intentResponses[intent][Math.floor(Math.random() * intentResponses[intent].length)];
-                
-                // For intents that need placeholders filled
-                if (["asset_creation", "workflow", "improvement", "game_design"].includes(intent)) {
-                    // Simplified placeholder filling - you'd need more sophisticated parsing in a real application
-                    const assetType = query.match(/character sprite|background image|3D model|animation/i)?.[0] || "asset";
-                    const aiTool = query.match(/Stable Diffusion|3D mesh generation|AI upscaling/i)?.[0] || "AI tool";
-                    const genre = query.match(/RPG|platformer|puzzle|strategy/i)?.[0] || "game";
-                    const resolution = query.match(/\d+x\d+/i)?.[0] || "high resolution";
-                    
-                    response = response.replace('{0}', assetType)
-                                       .replace('{1}', aiTool)
-                                       .replace('{2}', genre)
-                                       .replace('{3}', resolution);
-                }
-                
-                return response;
+                return intentResponses[intent][Math.floor(Math.random() * intentResponses[intent].length)];
             } else {
                 return "I'm not sure how to respond to that. Could you please rephrase your question?";
             }
@@ -82,10 +56,14 @@
             
             displayMessage('User: ' + userInput);
             
-            const intent = await classifyIntent(userInput);
-            const response = getResponse(intent, userInput);
-            
-            displayMessage('Chatbot: ' + response);
+            try {
+                const intent = await classifyIntent(userInput);
+                const response = getResponse(intent, userInput);
+                displayMessage('Chatbot: ' + response);
+            } catch (error) {
+                console.error('Error processing message:', error);
+                displayMessage('Chatbot: Sorry, I encountered an error. Please try again.');
+            }
         }
 
         function displayMessage(message) {
