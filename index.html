@@ -11,24 +11,26 @@
     <input type="text" id="user-input" placeholder="Type a message">
     <button onclick="getResponse()">Send</button>
     <p id="response"></p>
-
     <script>
         let model;
         let tokenizer;
         let word_index;
-        let intents;
+        let intentResponses;
         const max_seq_len = 50;  // Adjust this based on your model's input shape
 
         async function loadModel() {
-            model = await tf.loadLayersModel('model/model.json');
-            const tokenizerResponse = await fetch('model/tokenizer.json');
-            const tokenizerData = await tokenizerResponse.json();
-            tokenizer = JSON.parse(tokenizerData);
-            word_index = JSON.parse(tokenizer.config.word_index);
-
-            const intentResponse = await fetch('model/intent_responses.json');
-            intents = await intentResponse.json();
-            console.log('Model and data loaded successfully');
+            try {
+                model = await tf.loadLayersModel('model/model.json');
+                const tokenizerResponse = await fetch('model/tokenizer.json');
+                const tokenizerData = await tokenizerResponse.json();
+                tokenizer = JSON.parse(tokenizerData);
+                word_index = JSON.parse(tokenizer.config.word_index);
+                const intentResponse = await fetch('model/intent_responses.json');
+                intentResponses = await intentResponse.json();
+                console.log('Model and data loaded successfully');
+            } catch (error) {
+                console.error('Error loading model or data:', error);
+            }
         }
 
         function preprocess(text) {
@@ -41,41 +43,50 @@
             return tf.tensor2d([paddedSequence]);
         }
 
-         async function getResponse() {
-            const inputText = document.getElementById('user-input').value;
-            const inputTensor = preprocess(inputText);
-            const prediction = await model.predict(inputTensor);
-            const intentIndex = tf.argMax(prediction, 1).dataSync()[0];
-            console.log('Predicted intent index:', intentIndex);
-            
-            const intents = Object.keys(intentResponses);
-            const predictedIntent = intents[intentIndex];
-            
-            let response;
-            if (predictedIntent && intentResponses[predictedIntent]) {
-                const responses = intentResponses[predictedIntent];
-                response = responses[Math.floor(Math.random() * responses.length)];
+        async function getResponse() {
+            try {
+                const inputText = document.getElementById('user-input').value;
+                const inputTensor = preprocess(inputText);
+                const prediction = await model.predict(inputTensor);
+                const intentIndex = tf.argMax(prediction, 1).dataSync()[0];
+                console.log('Predicted intent index:', intentIndex);
                 
-                // Handle dynamic placeholders for specific intents
-                if (['asset_creation', 'workflow', 'improvement', 'game_design'].includes(predictedIntent)) {
-                    const assetType = inputText.match(/character sprite|background image|3D model|animation/i)?.[0] || "asset";
-                    const aiTool = inputText.match(/Stable Diffusion|3D mesh generation|AI upscaling/i)?.[0] || "AI tool";
-                    const genre = inputText.match(/RPG|platformer|puzzle|strategy/i)?.[0] || "game";
-                    const resolution = inputText.match(/\d+x\d+/i)?.[0] || "high resolution";
+                const intents = Object.keys(intentResponses);
+                const predictedIntent = intents[intentIndex];
+                
+                let response;
+                if (predictedIntent && intentResponses[predictedIntent]) {
+                    const responses = intentResponses[predictedIntent];
+                    response = responses[Math.floor(Math.random() * responses.length)];
                     
-                    response = response.replace(/\{0\}/g, assetType)
-                                       .replace(/\{1\}/g, aiTool)
-                                       .replace(/\{2\}/g, genre)
-                                       .replace(/\{3\}/g, resolution);
+                    // Handle dynamic placeholders for specific intents
+                    if (['asset_creation', 'workflow', 'improvement', 'game_design'].includes(predictedIntent)) {
+                        const assetType = inputText.match(/character sprite|background image|3D model|animation/i)?.[0] || "asset";
+                        const aiTool = inputText.match(/Stable Diffusion|3D mesh generation|AI upscaling/i)?.[0] || "AI tool";
+                        const genre = inputText.match(/RPG|platformer|puzzle|strategy/i)?.[0] || "game";
+                        const resolution = inputText.match(/\d+x\d+/i)?.[0] || "high resolution";
+                        
+                        response = response.replace(/\{0\}/g, assetType)
+                                           .replace(/\{1\}/g, aiTool)
+                                           .replace(/\{2\}/g, genre)
+                                           .replace(/\{3\}/g, resolution);
+                    }
+                } else {
+                    response = "I'm sorry, I didn't understand that.";
                 }
-            } else {
-                response = "I'm sorry, I didn't understand that.";
+                
+                document.getElementById('response').innerText = response;
+            } catch (error) {
+                console.error('Error in getResponse:', error);
+                document.getElementById('response').innerText = "Sorry, there was an error processing your request.";
             }
-            
-            document.getElementById('response').innerText = response;
         }
 
-        loadModel();
+        loadModel().then(() => {
+            console.log('Model loaded and ready');
+        }).catch(error => {
+            console.error('Error loading model:', error);
+        });
     </script>
 </body>
 </html>
