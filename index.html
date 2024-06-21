@@ -27,25 +27,17 @@
                 // Modify the input layer to accept any batch size
                 modelJSON.modelTopology.model_config.config.layers[0].config.batch_input_shape = [null, 50];
         
-                // Convert snake_case to camelCase for all keys in the JSON
-                function convertKeys(obj) {
-                    if (typeof obj !== 'object' || obj === null) {
-                        return obj;
-                    }
-                    if (Array.isArray(obj)) {
-                        return obj.map(convertKeys);
-                    }
-                    return Object.keys(obj).reduce((acc, key) => {
-                        const camelKey = key.replace(/_([a-z])/g, (g) => g[1].toUpperCase());
-                        acc[camelKey] = convertKeys(obj[key]);
-                        return acc;
-                    }, {});
-                }
-        
-                modelJSON = convertKeys(modelJSON);
+                // Create the model artifacts object
+                const modelArtifacts = {
+                    modelTopology: modelJSON.modelTopology,
+                    weightsManifest: modelJSON.weightsManifest,
+                    format: modelJSON.format,
+                    generatedBy: modelJSON.generatedBy,
+                    convertedBy: modelJSON.convertedBy
+                };
         
                 // Load the model with the modified JSON
-                model = await tf.loadLayersModel(tf.io.fromMemory(modelJSON));
+                model = await tf.loadLayersModel(tf.io.fromMemory(modelArtifacts, 'model/'));
                 
                 const labelEncoderResponse = await fetch('model/label_encoder.json');
                 labelEncoder = await labelEncoderResponse.json();
