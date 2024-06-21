@@ -41,17 +41,33 @@
             return tf.tensor2d([paddedSequence]);
         }
 
-        async function getResponse() {
+         async function getResponse() {
             const inputText = document.getElementById('user-input').value;
             const inputTensor = preprocess(inputText);
             const prediction = await model.predict(inputTensor);
-            const responseIndex = tf.argMax(prediction, 1).dataSync()[0];
-            console.log('Predicted intent index:', responseIndex);
-            console.log('intents', intents)
-            console.log('prediction', prediction)
+            const intentIndex = tf.argMax(prediction, 1).dataSync()[0];
+            console.log('Predicted intent index:', intentIndex);
+            
+            const intents = Object.keys(intentResponses);
+            const predictedIntent = intents[intentIndex];
+            
             let response;
-            if (intents[responseIndex] && intents[responseIndex].responses) {
-                response = intents[responseIndex].responses[0];
+            if (predictedIntent && intentResponses[predictedIntent]) {
+                const responses = intentResponses[predictedIntent];
+                response = responses[Math.floor(Math.random() * responses.length)];
+                
+                // Handle dynamic placeholders for specific intents
+                if (['asset_creation', 'workflow', 'improvement', 'game_design'].includes(predictedIntent)) {
+                    const assetType = inputText.match(/character sprite|background image|3D model|animation/i)?.[0] || "asset";
+                    const aiTool = inputText.match(/Stable Diffusion|3D mesh generation|AI upscaling/i)?.[0] || "AI tool";
+                    const genre = inputText.match(/RPG|platformer|puzzle|strategy/i)?.[0] || "game";
+                    const resolution = inputText.match(/\d+x\d+/i)?.[0] || "high resolution";
+                    
+                    response = response.replace(/\{0\}/g, assetType)
+                                       .replace(/\{1\}/g, aiTool)
+                                       .replace(/\{2\}/g, genre)
+                                       .replace(/\{3\}/g, resolution);
+                }
             } else {
                 response = "I'm sorry, I didn't understand that.";
             }
