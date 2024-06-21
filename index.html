@@ -47,7 +47,8 @@
             const prediction = await model.predict(inputTensor);
             const responseIndex = tf.argMax(prediction, 1).dataSync()[0];
             console.log('Predicted intent index:', responseIndex);
-            
+            console.log('intents', intents)
+            console.log('prediction', prediction)
             let response;
             if (intents[responseIndex] && intents[responseIndex].responses) {
                 response = intents[responseIndex].responses[0];
